@@ -1,0 +1,388 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox, scrolledtext, Menu, ttk
+import os
+import zipfile
+import shutil
+import json
+import uuid
+import ctypes
+import logging
+from json.decoder import JSONDecodeError
+
+# Configure logging
+logging.basicConfig(filename='error_log.txt', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.debug('Starting application.')
+
+class TermsOfUseWindow:
+    def __init__(self, parent):
+        logging.debug('Initializing TermsOfUseWindow.')
+        self.parent = parent
+        self.window = tk.Toplevel(parent)
+        self.window.title("Terms of Use - AutoBE - TBL")
+        self.window.geometry("800x600")
+        self.window.configure(bg='#282C34')
+        self.window.minsize(800, 600)
+
+        self.title_label = tk.Label(self.window, text="Terms of Use", font=("Helvetica", 18, "bold"), bg='#282C34', fg='#FFFFFF')
+        self.title_label.pack(pady=10)
+
+        self.text = scrolledtext.ScrolledText(self.window, wrap=tk.WORD, bg='#1E1E1E', fg='#FFFFFF', insertbackground='#FFFFFF', font=("Helvetica", 12), padx=20, pady=20)
+        self.text.pack(padx=20, pady=20, expand=True, fill='both')
+
+        terms_text = """Terms of Use
+Please read and accept the Terms of Use to continue using AutoBE - TBL.
+
+1. Introduction
+   - AutoBE - TBL is a tool for merging Minecraft add-ons.
+
+2. Acceptance of Terms
+   - By using AutoBE - TBL, you agree to these terms.
+
+3. User Responsibilities
+   - You are responsible for ensuring you have the right to use and modify the add-ons.
+
+4. Intellectual Property Rights
+   - Users retain copyright over their content. We do not claim ownership of add-ons created or merged using this tool.
+
+5. Prohibited Use
+   - You may not use this tool for illegal purposes or to infringe on intellectual property.
+
+6. Disclaimer of Warranties
+   - AutoBE - TBL is provided "as is" without warranties of any kind.
+
+7. Limitation of Liability
+   - We are not liable for any damages resulting from the use of this tool.
+
+8. Indemnification
+   - You agree to indemnify us from any claims resulting from your misuse of the tool.
+
+9. Changes to Terms
+   - We may modify these terms and will notify users of changes.
+
+10. Governing Law
+   - These terms are governed by the laws of our jurisdiction.
+
+Acceptance of these terms is mandatory to use AutoBE - TBL."""
+        self.text.insert(tk.END, terms_text)
+        self.text.config(state=tk.DISABLED)
+
+        self.accept_button = tk.Button(self.window, text="I Accept", command=self.accept_terms, bg='#61AFEF', fg='#282C34', font=("Helvetica", 14, "bold"))
+        self.accept_button.pack(pady=10)
+
+    def accept_terms(self):
+        logging.debug('Terms accepted.')
+        self.window.destroy()
+        logging.debug('Terms of Use window closed.')
+        self.parent.deiconify()
+
+class AutoBE_TBL_GUI:
+    def __init__(self, root):
+        logging.debug('Initializing AutoBE_TBL_GUI.')
+        self.root = root
+        self.root.withdraw()  # Hide main window initially
+        self.root.title("AutoBE - TBL")
+        self.root.geometry("800x600")  # Set default size
+        self.root.minsize(800, 600)  # Set minimum size
+        self.root.configure(bg='#282C34')
+        self.menu_bar = Menu(self.root, bg='#21252B', fg='#FFFFFF')
+        self.root.config(menu=self.menu_bar)
+        self.help_menu = Menu(self.menu_bar, tearoff=0, bg='#21252B', fg='#FFFFFF')
+        self.menu_bar.add_cascade(label="Help", menu=self.help_menu)
+        self.help_menu.add_command(label="Help Contents", command=self.show_help)
+        self.create_widgets()
+        self.show_terms_of_use()
+
+    def show_terms_of_use(self):
+        logging.debug('Showing Terms of Use window.')
+        self.terms_window = TermsOfUseWindow(self.root)
+        self.root.wait_window(self.terms_window.window)
+        logging.debug('Terms of Use window closed.')
+
+    def create_widgets(self):
+        logging.debug('Creating widgets.')
+        self.instructions = tk.Label(self.root, text="Use the 'Add Files' button to select your add-on files:", bg='#282C34', fg='#FFFFFF', font=("Helvetica", 14))
+        self.instructions.grid(row=0, column=0, columnspan=3, pady=10, padx=10, sticky='ew')
+        self.drop_area = tk.Listbox(self.root, width=50, height=10, bg='#1E1E1E', fg='#61AFEF', selectbackground='#98C379', highlightbackground='#98C379', font=("Helvetica", 12))
+        self.drop_area.grid(row=1, column=0, columnspan=3, pady=10, padx=10, sticky='ew')
+        self.add_files_button = tk.Button(self.root, text="Add Files", command=self.add_files, bg='#61AFEF', fg='#282C34', activebackground='#98C379', font=("Helvetica", 12))
+        self.add_files_button.grid(row=2, column=0, pady=5, padx=10, sticky='ew')
+        self.clear_files_button = tk.Button(self.root, text="Clear Files", command=self.clear_files, bg='#61AFEF', fg='#282C34', activebackground='#98C379', font=("Helvetica", 12))
+        self.clear_files_button.grid(row=2, column=1, pady=5, padx=10, sticky='ew')
+        self.merge_button = tk.Button(self.root, text="Merge Add-ons", command=self.merge_addons, bg='#61AFEF', fg='#282C34', activebackground='#98C379', font=("Helvetica", 12))
+        self.merge_button.grid(row=2, column=2, pady=5, padx=10, sticky='ew')
+        self.preview_button = tk.Button(self.root, text="Preview Changes", command=self.preview_changes, bg='#61AFEF', fg='#282C34', activebackground='#98C379', font=("Helvetica", 12))
+        self.preview_button.grid(row=3, column=0, pady=5, padx=10, sticky='ew')
+        self.progress = ttk.Progressbar(self.root, orient='horizontal', length=400, mode='determinate')
+        self.progress.grid(row=4, column=0, columnspan=3, pady=10, padx=10, sticky='ew')
+        self.log_area = scrolledtext.ScrolledText(self.root, width=80, height=20, bg='#1E1E1E', fg='#61AFEF', insertbackground='#FFFFFF', font=("Helvetica", 12))
+        self.log_area.grid(row=5, column=0, columnspan=3, pady=10, padx=10, sticky='ew')
+        self.watermark_label = tk.Label(self.root, text="Created By FHMC & ELMC", font=("Helvetica", 12), bg='#282C34', fg='#ABB2BF', anchor='w')
+        self.watermark_label.grid(row=6, column=0, columnspan=3, sticky='w', padx=10, pady=5)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=1)
+        self.root.grid_columnconfigure(2, weight=1)
+        logging.debug('Widgets created successfully.')
+
+    def add_files(self):
+        logging.debug('Adding files.')
+        files = filedialog.askopenfilenames(filetypes=[("Minecraft Add-ons", "*.mcpack *.mcaddon")])
+        for file in files:
+            if file not in self.drop_area.get(0, tk.END):
+                self.drop_area.insert(tk.END, file)
+                self.log_message(f"File added: {file}")
+            else:
+                self.log_message(f"Duplicate file skipped: {file}")
+
+    def clear_files(self):
+        logging.debug('Clearing files.')
+        self.drop_area.delete(0, tk.END)
+        self.log_area.delete('1.0', tk.END)
+        self.log_message("Files cleared successfully.")
+
+    def log_message(self, message):
+        logging.debug(f'Log message: {message}')
+        self.log_area.insert(tk.END, message + '\n')
+        self.log_area.see(tk.END)
+        print(message)
+        logging.info(message)
+
+    def merge_addons(self):
+        logging.debug('Merging addons.')
+        selected_files = self.drop_area.get(0, tk.END)
+        if not selected_files:
+            messagebox.showerror("Error", "No add-ons provided.")
+            self.log_message("Error: No add-ons provided.")
+            return
+
+        temp_dir = self.extract_addons(selected_files)
+        try:
+            self.progress["value"] = 0
+            self.root.update_idletasks()
+            output_file = self.combine_addons(temp_dir)
+            self.progress["value"] = 100
+            self.root.update_idletasks()
+            messagebox.showinfo("Success", f"Add-ons merged successfully! Output file: {output_file}")
+        except Exception as e:
+            self.log_message(f"An error occurred during merging: {e}")
+            messagebox.showerror("Error", f"An error occurred during merging: {e}")
+            logging.error(f"An error occurred during merging: {e}", exc_info=True)
+        finally:
+            self.progress["value"] = 0
+            self.root.update_idletasks()
+
+    def extract_addons(self, addon_files):
+        logging.debug('Extracting addons.')
+        temp_dir = "temp_extracted"
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        os.makedirs(temp_dir)
+        for file in addon_files:
+            try:
+                with zipfile.ZipFile(file, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                self.log_message(f"Extracted add-on: {file}")
+                # Adjust for nested directory structures
+                initial_contents = os.listdir(temp_dir)
+                if len(initial_contents) == 1 and os.path.isdir(os.path.join(temp_dir, initial_contents[0])):
+                    nested_dir = os.path.join(temp_dir, initial_contents[0])
+                    for nested_file in os.listdir(nested_dir):
+                        shutil.move(os.path.join(nested_dir, nested_file), temp_dir)
+                    os.rmdir(nested_dir)
+            except zipfile.BadZipFile as e:
+                self.log_message(f"Error extracting {file}: {e}")
+                messagebox.showerror("Error", f"Error extracting {file}: {e}")
+                logging.error(f"Error extracting {file}: {e}", exc_info=True)
+        return temp_dir
+
+    def combine_addons(self, temp_dir):
+        logging.debug('Combining addons.')
+        combined_dir = os.path.join(temp_dir, 'combined')
+        os.makedirs(combined_dir, exist_ok=True)
+        combined_manifest = self.create_combined_manifest()
+        added_modules = set()
+        total_files = sum([len(files) for r, d, files in os.walk(temp_dir)])
+        file_count = 0
+        combined_item_textures = {}
+
+        for root, dirs, files in os.walk(temp_dir):
+            if root == combined_dir:
+                continue
+            for file in files:
+                src_path = os.path.join(root, file)
+                rel_path = os.path.relpath(src_path, temp_dir)
+                dest_path = os.path.join(combined_dir, rel_path)
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                if file == 'manifest.json':
+                    src_manifest = self.load_json(src_path)
+                    self.combine_manifests(combined_manifest, src_manifest, added_modules)
+                elif file == 'item_texture.json':
+                    src_item_texture = self.load_json(src_path)
+                    combined_item_textures = self.advanced_merge_json(combined_item_textures, src_item_texture)
+                elif file == 'player.json':
+                    dest_json = self.load_json(dest_path) if os.path.exists(dest_path) else {}
+                    src_json = self.load_json(src_path)
+                    merged_json = self.merge_player_json(dest_json, src_json)
+                    with open(dest_path, 'w') as json_file:
+                        json.dump(merged_json, json_file, indent=4)
+                elif file.endswith('.json'):
+                    dest_json = self.load_json(dest_path) if os.path.exists(dest_path) else {}
+                    src_json = self.load_json(src_path)
+                    merged_json = self.advanced_merge_json(dest_json, src_json)  # Use advanced_merge_json
+                    with open(dest_path, 'w') as json_file:
+                        json.dump(merged_json, json_file, indent=4)
+                else:
+                    shutil.copy2(src_path, dest_path)
+
+                file_count += 1
+                self.progress["value"] = (file_count / total_files) * 100
+                self.root.update_idletasks()
+
+        # Write the combined manifest
+        with open(os.path.join(combined_dir, 'manifest.json'), 'w') as manifest_file:
+            json.dump(combined_manifest, manifest_file, indent=4)
+
+        # Write the combined item_texture.json
+        if combined_item_textures:
+            with open(os.path.join(combined_dir, 'item_texture.json'), 'w') as item_texture_file:
+                json.dump(combined_item_textures, item_texture_file, indent=4)
+
+        output_dir = "NewPack"
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, 'combined_addon.mcpack')
+        with zipfile.ZipFile(output_file, 'w') as zipf:
+            for root, dirs, files in os.walk(combined_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arcname = os.path.relpath(file_path, combined_dir)
+                    zipf.write(file_path, arcname)
+
+        shutil.rmtree(temp_dir)
+        self.log_message(f"Combined addon created at {output_file}")
+        return output_file
+
+    def create_combined_manifest(self):
+        logging.debug('Creating combined manifest.')
+        return {
+            "format_version": 2,
+            "header": {
+                "description": "Combined Pack",
+                "name": "Combined Pack",
+                "uuid": str(uuid.uuid4()),
+                "version": [1, 0, 0],
+                "min_engine_version": [1, 20, 81]  # Set to match user's game version
+            },
+            "modules": []
+        }
+
+    def combine_manifests(self, combined_manifest, new_manifest, added_modules):
+        logging.debug('Combining manifests.')
+        for module in new_manifest.get("modules", []):
+            module_key = (module["type"], module["uuid"])
+            if module_key not in added_modules:
+                module["uuid"] = str(uuid.uuid4())  # Ensure each module has a unique UUID
+                combined_manifest["modules"].append(module)
+                added_modules.add(module_key)
+
+    def load_json(self, path):
+        logging.debug(f'Loading JSON file from {path}.')
+        try:
+            with open(path, 'r') as file:
+                data = json.load(file)
+                return data
+        except JSONDecodeError as e:
+            self.log_message(f"Skipping invalid JSON file: {path}")
+            logging.error(f"Skipping invalid JSON file: {path} - {e}", exc_info=True)
+            return {}
+        except Exception as e:
+            self.log_message(f"Error loading JSON file {path}: {e}")
+            logging.error(f"Error loading JSON file {path}: {e}", exc_info=True)
+            return {}
+
+    def advanced_merge_json(self, dest, src):
+        logging.debug('Merging JSON files.')
+        if isinstance(dest, dict) and isinstance(src, dict):
+            for key, value in src.items():
+                if key in dest:
+                    if isinstance(dest[key], dict) and isinstance(value, dict):
+                        dest[key] = self.advanced_merge_json(dest[key], value)
+                    elif isinstance(dest[key], list) and isinstance(value, list):
+                        dest[key] = list(set(dest[key] + value))
+                    else:
+                        dest[key] = value
+                else:
+                    dest[key] = value
+        elif isinstance(dest, list) and isinstance(src, list):
+            for item in src:
+                if item not in dest:
+                    dest.append(item)
+        else:
+            return src
+        return dest
+
+    def merge_player_json(self, dest, src):
+        logging.debug('Merging player JSON files.')
+        for key, value in src.items():
+            if key in dest:
+                if isinstance(dest[key], dict) and isinstance(value, dict):
+                    dest[key] = self.advanced_merge_json(dest[key], value)
+                elif isinstance(dest[key], list) and isinstance(value, list):
+                    dest[key] = list(set(dest[key] + value))
+                else:
+                    dest[key] = value
+            else:
+                dest[key] = value
+        return dest
+
+    def show_help(self):
+        logging.debug('Showing help.')
+        help_window = tk.Toplevel(self.root)
+        help_window.title("Help - AutoBE - TBL")
+        help_window.geometry("600x400")
+        help_window.configure(bg='#282C34')
+
+        help_text = """
+        AutoBE - TBL Help
+
+        1. Using The Tool:
+           - Before You Start Make Sure You Create A "MyPack" & "NewPack" Folder In The Same Area As The Tool.
+           - Place Your Addon's In The "MyPack" Folder.
+           - Click The 'Add Files' Button To Select Your .mcpack or .mcaddon files.
+           - Use The 'Clear Files' Button To Remove All Selected Files.
+           - Click The 'Merge Add-ons' Button To Start The Merging Process.
+           - The Progress Bar Will Indicate The Status Of The Merging Process.
+           - A Success Message Will Appear Once The Merging Is Complete, Indicating The Location Of The Merged Add-on.
+
+        2. Troubleshooting:
+           - If You Encounter Errors, Check The Error Log For Help.
+           - Ensure All Selected Add-on Files Are Valid And Properly Formatted For AutoBE.
+           - If The Tool Fails To Merge Add-ons, Try Clearing The Selected Files And Adding Them Again.
+
+        3. Support:
+           - For Additional Support, Please Contact: @TBL - The Bedrock Lab
+        
+        4. Tip's:
+           - The Tool Does Not Yet Merge & Fix Every File/Folder.
+           - The Tool Will Be Updated Often.
+           - Use At Your Own Risk.
+        """
+        help_label = tk.Label(help_window, text="Help - AutoBE - TBL", font=("Helvetica", 16, "bold"), bg='#282C34', fg='#FFFFFF')
+        help_label.pack(pady=10)
+
+        help_text_area = scrolledtext.ScrolledText(help_window, wrap=tk.WORD, bg='#1E1E1E', fg='#FFFFFF', insertbackground='#FFFFFF', font=("Helvetica", 12))
+        help_text_area.pack(padx=10, pady=10, expand=True, fill='both')
+        help_text_area.insert(tk.END, help_text)
+        help_text_area.config(state=tk.DISABLED)
+
+def hide_console():
+    logging.debug('Hiding console.')
+    hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+    if hwnd != 0:
+        ctypes.windll.user32.ShowWindow(hwnd, 0)
+        ctypes.windll.kernel32.CloseHandle(hwnd)
+
+if __name__ == "__main__":
+    logging.debug('Starting application.')
+    hide_console()
+    root = tk.Tk()
+    main_window = AutoBE_TBL_GUI(root)
+    root.mainloop()
